@@ -25,12 +25,12 @@ source(here("analysis/zoib-functions.R"))
 
 # The following file gets created by
 # `analysis/make-map-data/RedRock_FireSeverity_production_v2.R`
-data <- readRDS(here("data/generated/RedRocks_map_data.rds"))
+data <- readRDS(here("data/generated/WFC_map_data.rds"))
 names(data) <- gsub("\\.", "", names(data))
 library(dplyr)
 library(rstan)
 library(readr)
-data <- dplyr::rename(data, slope = Slope, prenbr = preNBR)
+#data <- dplyr::rename(data, slope = Slope, prenbr = preNBR) # slope and prenbr already in lower clase
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
 sm <- rstan::stan_model(here("analysis/zoib1re.stan"))
@@ -50,8 +50,8 @@ vars <- expand.grid(x = x_vars, y = y_vars, stringsAsFactors = FALSE)
 out <- plyr::mlply(.data = vars, function(x, y) {
   d <- get_dat(!!quo_name(y), !!quo_name(x),
     file = file, max_predictor = 2500)
-  m <- fit_model(d, model = sm, predictors = "xscaled", iter = 1000L,
-    chains = 4L)
+  m <- fit_model(d, model = sm, predictors = "xscaled", iter = 100L, # changed from 1000L -> 100L
+    chains = 1L) # changed from 4 -> 1L
   list(m = m, d = d, x = x, y = y)
 })
 ```
@@ -66,7 +66,7 @@ xx <- purrr::map_df(out, function(x) {
   e <- rstan::extract(x$m$model)
   
   mm_pred <- cbind(rep(1, nrow(pred_dat)), pred_dat$xscaled)
-  re_id <- x$d[x$d$group == "rr", "group_id", drop = TRUE][[1]]
+  re_id <- x$d[x$d$group == "wfc", "group_id", drop = TRUE][[1]]
   # pred_p <- plogis(mm_pred %*% t(e$bp_j) +
   #     rep(e$zp_g[,re_id,drop=TRUE], each = nrow(mm_pred)))
   mu_inv_logit <- plogis(mm_pred %*% t(e$bp_j) +
@@ -110,7 +110,7 @@ xx <- purrr::map_df(out, function(x) {
   pred_df$predictor <- x$x
   pred_df
 })
-readr::write_rds(xx, here::here("data/generated/RedRocks_predictions.rds"))
+readr::write_rds(xx, here::here("data/generated/WFC_predictions.rds"))
 ```
 
 # Now for Q2 maps:
@@ -136,7 +136,7 @@ out_q2 <- plyr::mlply(.data = vars, function(x, y) {
     model = sm,
     # predictors = c("xscaled"),
     predictors = c("xscaled", extra_x_vars),
-    iter = 1000L, chains = 4L, adapt_delta = 0.98, seed = 42
+    iter = 100L, chains = 1L, adapt_delta = 0.98, seed = 42 #changed to 100L and 1L
   )
   list(m = m, d = d, x = x, y = y)
 })
@@ -190,7 +190,7 @@ xx <- purrr::map_df(out_q2, function(x) {
     prep_stan_dat(predictors = c("xscaled", extra_x_vars), arrange_by_group = FALSE)
 
   mm_pred <- prep_dat$stan_dat$Xp_ij # pick any one; all the same
-  re_id <- x$d[x$d$group == "rr", "group_id", drop = TRUE][[1]]
+  re_id <- x$d[x$d$group == "wfc", "group_id", drop = TRUE][[1]]
 
   mu_inv_logit <- plogis(mm_pred %*% t(e$bp_j) +
     rep(e$zp_g[, re_id, drop = TRUE], each = nrow(mm_pred)))
@@ -229,7 +229,7 @@ xx <- purrr::map_df(out_q2, function(x) {
   pred_df$predictor <- x$x
   pred_df
 })
-readr::write_rds(xx, here("data/generated/RedRocks_predictions_Q2.rds"))
+readr::write_rds(xx, here("data/generated/WFC_predictions_Q2.rds"))
 ```
 
 ```{r plot, fig.cap="The predictor"}
@@ -404,8 +404,8 @@ ggsave(here("analysis/figs/map-components-Q2.pdf"), width = 4, height = 7.5)
 
 
 ```{r}
-q2 <- readr::read_rds(here("data/generated/RedRocks_predictions_Q2.rds"))
-q1 <- readr::read_rds(here("data/generated/RedRocks_predictions.rds"))
+q2 <- readr::read_rds(here("data/generated/WFC_predictions_Q2.rds"))
+q1 <- readr::read_rds(here("data/generated/WFC_predictions.rds"))
 
 q2 <- mutate(q2, version = "Q2") %>%
   rename(est_q2 = q0.50)
